@@ -3,7 +3,7 @@ np.set_printoptions(precision=2, suppress=True)
 
 import time
 import cv2
-from TeleVision import OpenTeleVision
+from TeleVision import TeleVision
 import pyzed.sl as sl
 
 grd_yup2grd_zup = np.array([[0, 0, -1, 0],
@@ -30,7 +30,7 @@ if err != sl.ERROR_CODE.SUCCESS:
 image_left = sl.Mat()
 image_right = sl.Mat()
 runtime_parameters = sl.RuntimeParameters()
-tv = OpenTeleVision(resolution)
+tv = TeleVision(resolution)
 
 while True :
     start = time.time()
