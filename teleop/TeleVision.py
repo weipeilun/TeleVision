@@ -5,7 +5,7 @@ from vuer.schemas import ImageBackground, group, Hands, WebRTCStereoVideoPlane, 
 from multiprocessing import Array, Value, Process, shared_memory, Queue, Manager, Event, Semaphore
 import numpy as np
 import asyncio
-# from webrtc.zed_server import *
+from webrtc.zed_server import *
 
 class OpenTeleVision:
     def __init__(self, img_shape, shm_name, queue, toggle_streaming, stream_mode="image", cert_file="./cert.pem", key_file="./key.pem"):
@@ -110,7 +110,8 @@ class OpenTeleVision:
     
     async def main_webrtc(self, session, fps=60):
         session.set @ DefaultScene(frameloop="always")
-        session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
+        session.upsert @ Hands(fps=fps, stream=True, key="hands")
+        # session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
         session.upsert @ WebRTCStereoVideoPlane(
                 src="https://192.168.8.102:8080/offer",
                 # iceServer={},
@@ -123,7 +124,8 @@ class OpenTeleVision:
             await asyncio.sleep(1)
     
     async def main_image(self, session, fps=60):
-        session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
+        session.upsert @ Hands(fps=fps, stream=True, key="hands")
+        # session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
         end_time = time.time()
         while True:
             start = time.time()
