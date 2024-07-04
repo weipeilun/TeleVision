@@ -12,7 +12,7 @@ from constants_vuer import *
 from TeleVision import OpenTeleVision
 import pyzed.sl as sl
 from dynamixel.active_cam import DynamixelAgent
-from multiprocessing import Array, Process, Queue, shared_memory
+from multiprocessing import Array, Process, Queue, shared_memory, Event
 
 resolution = (720, 1280)
 crop_size_w = 340  # (resolution[1] - resolution[0]) // 2
@@ -48,7 +48,9 @@ shm = shared_memory.SharedMemory(create=True, size=np.prod(img_shape) * np.uint8
 shm_name = shm.name
 img_array = np.ndarray((img_shape[0], img_shape[1], 3), dtype=np.uint8, buffer=shm.buf)
 
-tv = OpenTeleVision(resolution_cropped, shm_name)
+image_queue = Queue()
+toggle_streaming = Event()
+tv = OpenTeleVision(resolution_cropped, shm_name, image_queue, toggle_streaming, cert_file="../cert.pem", key_file="../key.pem")
 
 while True:
     start = time.time()
