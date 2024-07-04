@@ -2,10 +2,10 @@ import time
 from vuer import Vuer
 from vuer.events import ClientEvent
 from vuer.schemas import ImageBackground, group, Hands, WebRTCStereoVideoPlane, DefaultScene
-from multiprocessing import Array, Process, shared_memory, Queue, Manager, Event, Semaphore
+from multiprocessing import Array, Value, Process, shared_memory, Queue, Manager, Event, Semaphore
 import numpy as np
 import asyncio
-from webrtc.zed_server import *
+# from webrtc.zed_server import *
 
 class OpenTeleVision:
     def __init__(self, img_shape, shm_name, queue, toggle_streaming, stream_mode="image", cert_file="./cert.pem", key_file="./key.pem"):
@@ -65,9 +65,9 @@ class OpenTeleVision:
             self.webrtc_process.start()
             # web.run_app(app, host="0.0.0.0", port=8080, ssl_context=ssl_context)
 
-        self.process = Process(target=self.run)
-        self.process.daemon = True
-        self.process.start()
+        Process(target=self.run, daemon=True).start()
+        # self.process.daemon = True
+        # self.process.start()
 
     
     def run(self):
@@ -104,8 +104,7 @@ class OpenTeleVision:
             self.right_hand_shared[:] = event.value["rightHand"]
             self.left_landmarks_shared[:] = np.array(event.value["leftLandmarks"]).flatten()
             self.right_landmarks_shared[:] = np.array(event.value["rightLandmarks"]).flatten()
-            print(self.left_hand_shared)
-        except: 
+        except:
             pass
     
     async def main_webrtc(self, session, fps=60):
