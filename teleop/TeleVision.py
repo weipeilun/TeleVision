@@ -66,6 +66,7 @@ class OpenTeleVision:
             # web.run_app(app, host="0.0.0.0", port=8080, ssl_context=ssl_context)
 
         Process(target=self.run, daemon=True).start()
+        pritn('success')
         # self.process.daemon = True
         # self.process.start()
 
