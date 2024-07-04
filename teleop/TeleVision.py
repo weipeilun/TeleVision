@@ -241,7 +241,9 @@ if __name__ == "__main__":
     shm_name = shm.name
     img_array = np.ndarray((img_shape[0], img_shape[1], 3), dtype=np.uint8, buffer=shm.buf)
 
-    tv = OpenTeleVision(resolution_cropped, cert_file="../cert.pem", key_file="../key.pem")
+    image_queue = Queue()
+    toggle_streaming = Event()
+    tv = OpenTeleVision(resolution_cropped, shm_name, image_queue, toggle_streaming, cert_file="../cert.pem", key_file="../key.pem")
     while True:
         # print(tv.left_landmarks)
         # print(tv.left_hand)
