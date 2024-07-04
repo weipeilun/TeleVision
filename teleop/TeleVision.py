@@ -104,6 +104,7 @@ class OpenTeleVision:
             self.right_hand_shared[:] = event.value["rightHand"]
             self.left_landmarks_shared[:] = np.array(event.value["leftLandmarks"]).flatten()
             self.right_landmarks_shared[:] = np.array(event.value["rightLandmarks"]).flatten()
+            print(self.left_hand_shared)
         except: 
             pass
     
