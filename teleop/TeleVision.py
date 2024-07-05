@@ -278,6 +278,7 @@ if __name__ == "__main__":
     shm = shared_memory.SharedMemory(create=True, size=np.prod(img_shape) * np.uint8().itemsize)
     shm_name = shm.name
     img_array = np.ndarray((img_shape[0], img_shape[1], 6), dtype=np.uint8, buffer=shm.buf)
+    np.copyto(img_array, np.ones((img_shape[0], img_shape[1], 6)) * 255)
 
     image_queue = Queue()
     toggle_streaming = Event()
