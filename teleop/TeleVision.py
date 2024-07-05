@@ -1,16 +1,20 @@
-import time
+import cv2
 from vuer import Vuer
 from vuer.events import ClientEvent
 from vuer.schemas import ImageBackground, group, Hands, WebRTCStereoVideoPlane, DefaultScene
 from multiprocessing import Array, Value, Process, shared_memory, Queue, Manager, Event, Semaphore
 import numpy as np
 import asyncio
+from tqdm import tqdm
+import imageio as iio
 from webrtc.zed_server import *
+import pyzed.sl as sl
+from threading import Thread
 
 class OpenTeleVision:
     def __init__(self, img_shape, shm_name, queue, toggle_streaming, stream_mode="image", cert_file="./cert.pem", key_file="./key.pem"):
         # self.app=Vuer()
-        self.img_shape = (img_shape[0], 2*img_shape[1], 3)
+        self.img_shape = img_shape
         self.img_height, self.img_width = img_shape[:2]
 
         self.app = Vuer(host='0.0.0.0', cert=cert_file, key=key_file, queries=dict(grid=False))
@@ -18,7 +22,7 @@ class OpenTeleVision:
         self.app.add_handler("CAMERA_MOVE")(self.on_cam_move)
         if stream_mode == "image":
             existing_shm = shared_memory.SharedMemory(name=shm_name)
-            self.img_array = np.ndarray((self.img_shape[0], self.img_shape[1], 3), dtype=np.uint8, buffer=existing_shm.buf)
+            self.img_array = np.ndarray((self.img_shape[0], self.img_shape[1], 6), dtype=np.uint8, buffer=existing_shm.buf)
             self.app.spawn(start=False)(self.main_image)
         elif stream_mode == "webrtc":
             self.app.spawn(start=False)(self.main_webrtc)
@@ -110,10 +114,9 @@ class OpenTeleVision:
     
     async def main_webrtc(self, session, fps=60):
         session.set @ DefaultScene(frameloop="always")
-        session.upsert @ Hands(fps=fps, stream=True, key="hands")
-        # session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
+        session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
         session.upsert @ WebRTCStereoVideoPlane(
-                src="https://192.168.8.102:8080/offer",
+                src="https://192.168.50.183:8080",
                 # iceServer={},
                 key="zed",
                 aspect=1.33334,
@@ -154,8 +157,8 @@ class OpenTeleVision:
             session.upsert(
             [ImageBackground(
                 # Can scale the images down.
-                display_image[::2, :self.img_width],
-                # display_image[:self.img_height:2, ::2],
+                display_image[:, :, :3],
+                # display_image[self.img_height::2, ::2],
                 # 'jpg' encoding is significantly faster than 'png'.
                 format="jpeg",
                 quality=80,
@@ -164,30 +167,29 @@ class OpenTeleVision:
                 # fixed=True,
                 aspect=1.66667,
                 # distanceToCamera=0.5,
-                height = 8,
-                position=[0, -1, 3],
+                height=8,
+                position=[0, 1, 3],
                 # rotation=[0, 0, 0],
-                layers=1, 
-                alphaSrc="./vinette.jpg"
+                layers=1,
             ),
-            ImageBackground(
-                # Can scale the images down.
-                display_image[::2, self.img_width:],
-                # display_image[self.img_height::2, ::2],
-                # 'jpg' encoding is significantly faster than 'png'.
-                format="jpeg",
-                quality=80,
-                key="right-image",
-                interpolate=True,
-                # fixed=True,
-                aspect=1.66667,
-                # distanceToCamera=0.5,
-                height = 8,
-                position=[0, -1, 3],
-                # rotation=[0, 0, 0],
-                layers=2, 
-                alphaSrc="./vinette.jpg"
-            )],
+                ImageBackground(
+                    # Can scale the images down.
+                    display_image[:, :, 3:],
+                    # display_image[self.img_height::2, ::2],
+                    # 'jpg' encoding is significantly faster than 'png'.
+                    format="jpeg",
+                    quality=80,
+                    key="right-image",
+                    interpolate=True,
+                    # fixed=True,
+                    aspect=1.66667,
+                    # distanceToCamera=0.5,
+                    height=8,
+                    position=[0, 1, 3],
+                    # rotation=[0, 0, 0],
+                    layers=2,
+                )
+            ],
             to="bgChildren",
             )
             # rest_time = 1/fps - time.time() + start
@@ -232,21 +234,55 @@ class OpenTeleVision:
             # return float(self.aspect_shared.value)
         return float(self.aspect_shared.value)
 
+
+def zed_camera_thread(img_array):
+    # Create a Camera object
+    zed = sl.Camera()
+
+    # Create a InitParameters object and set configuration parameters
+    init_params = sl.InitParameters()
+    init_params.camera_resolution = sl.RESOLUTION.HD720  # Use HD720 opr HD1200 video mode, depending on camera type.
+    init_params.camera_fps = 60  # Set fps at 30
+
+    # Open the camera
+    err = zed.open(init_params)
+    if err != sl.ERROR_CODE.SUCCESS:
+        print("Camera Open : " + repr(err) + ". Exit program.")
+        exit()
+
+    image_left = sl.Mat()
+    image_right = sl.Mat()
+    runtime_parameters = sl.RuntimeParameters()
+
+    while True:
+        if zed.grab(runtime_parameters) == sl.ERROR_CODE.SUCCESS:
+            zed.retrieve_image(image_left, sl.VIEW.LEFT)
+            zed.retrieve_image(image_right, sl.VIEW.RIGHT)
+
+        rgb_left = cv2.cvtColor(image_left.numpy(), cv2.COLOR_BGRA2RGB)
+        rgb_right = cv2.cvtColor(image_right.numpy(), cv2.COLOR_BGRA2RGB)
+        rgb_left = cv2.resize(rgb_left, (600, 450))
+        rgb_right = cv2.resize(rgb_right, (600, 450))
+        rgb_merge = np.concatenate([rgb_left, rgb_right], axis=2)
+        np.copyto(img_array, rgb_merge)
+    zed.close()
+
     
 if __name__ == "__main__":
     resolution = (720, 1280)
     crop_size_w = 340  # (resolution[1] - resolution[0]) // 2
     crop_size_h = 270
     resolution_cropped = (resolution[0] - crop_size_h, resolution[1] - 2 * crop_size_w)  # 450 * 600
-    img_shape = (2 * resolution_cropped[0], resolution_cropped[1], 3)  # 900 * 600
+    img_shape = (resolution_cropped[0], resolution_cropped[1], 3 * 2)  # 900 * 600
     img_height, img_width = resolution_cropped[:2]  # 450 * 600
     shm = shared_memory.SharedMemory(create=True, size=np.prod(img_shape) * np.uint8().itemsize)
     shm_name = shm.name
-    img_array = np.ndarray((img_shape[0], img_shape[1], 3), dtype=np.uint8, buffer=shm.buf)
+    img_array = np.ndarray((img_shape[0], img_shape[1], 6), dtype=np.uint8, buffer=shm.buf)
 
     image_queue = Queue()
     toggle_streaming = Event()
-    tv = OpenTeleVision(resolution_cropped, shm_name, image_queue, toggle_streaming, cert_file="../cert.pem", key_file="../key.pem")
+    tv = OpenTeleVision(resolution_cropped, shm_name, image_queue, toggle_streaming, stream_mode='image', cert_file="../cert.pem", key_file="../key.pem")
+    Thread(target=zed_camera_thread, args=(img_array,), daemon=True).start()
     while True:
         # print(tv.left_landmarks)
         # print(tv.left_hand)
